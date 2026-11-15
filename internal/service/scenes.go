@@ -32,6 +32,12 @@ func (s *Service) PutScene(id, name string, expected int, d model.Document) (mod
 				return model.Conflict("scene references unavailable asset")
 			}
 		}
+		for _, ref := range scene.MaskRefs(d) {
+			m, ok := st.Masks[ref]
+			if !ok || m.State != "available" {
+				return model.Conflict("scene references unavailable mask")
+			}
+		}
 		out = model.Scene{ID: id, Name: name, Revision: old.Revision + 1, State: "active", Document: d, UpdatedAt: time.Now().UTC()}
 		st.Scenes[id] = out
 		st.Emit("scene.saved", id)
@@ -84,7 +90,15 @@ func (s *Service) Freeze(id string, expected int) (model.Snapshot, error) {
 			}
 			assets[ref] = a
 		}
-		out = model.Snapshot{ID: model.ID("snap", st.Sequence+1), SceneID: id, Revision: v.Revision, State: "active", Document: v.Document, Assets: assets, CreatedAt: time.Now().UTC()}
+		masks := map[string]model.Mask{}
+		for _, ref := range scene.MaskRefs(v.Document) {
+			m, ok := st.Masks[ref]
+			if !ok || m.State != "available" {
+				return model.Conflict("snapshot references unavailable mask")
+			}
+			masks[ref] = m
+		}
+		out = model.Snapshot{ID: model.ID("snap", st.Sequence+1), SceneID: id, Revision: v.Revision, State: "active", Document: v.Document, Assets: assets, Masks: masks, CreatedAt: time.Now().UTC()}
 		out.Digest = model.SnapshotDigest(out)
 		st.Snapshots[out.ID] = out
 		st.Emit("snapshot.frozen", out.ID)

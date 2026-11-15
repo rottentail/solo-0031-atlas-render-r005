@@ -36,6 +36,16 @@ func (s *Service) Import(id, name string, p bundle.Package) (model.Scene, error)
 				st.Assets[aid] = a
 			}
 		}
+		for mid, m := range p.Snapshot.Masks {
+			if existing, ok := st.Masks[mid]; ok {
+				if existing.Digest != m.Digest || existing.State != "available" {
+					return model.Conflict("destination mask conflicts with package")
+				}
+			} else {
+				m.State = "available"
+				st.Masks[mid] = m
+			}
+		}
 		out = model.Scene{ID: id, Name: name, Revision: 1, State: "active", Document: p.Snapshot.Document, UpdatedAt: time.Now().UTC()}
 		st.Scenes[id] = out
 		st.Emit("scene.imported", id)

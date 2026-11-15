@@ -46,6 +46,18 @@ type Layer struct {
 	AssetID   string    `json:"assetId,omitempty"`
 	Clip      *Rect     `json:"clip,omitempty"`
 	Children  []Layer   `json:"children,omitempty"`
+	MaskID    string    `json:"maskId,omitempty"`
+	// MaskTransform places the referenced grayscale mask in document space.
+	// Only meaningful when MaskID is set; nil defaults to the identity transform.
+	MaskTransform *Transform `json:"maskTransform,omitempty"`
+}
+type Mask struct {
+	ID     string `json:"id"`
+	Digest string `json:"digest"`
+	State  string `json:"state"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+	PNG    []byte `json:"png"`
 }
 type Document struct {
 	Width      int     `json:"width"`
@@ -76,6 +88,7 @@ type Snapshot struct {
 	State     string           `json:"state"`
 	Document  Document         `json:"document"`
 	Assets    map[string]Asset `json:"assets"`
+	Masks     map[string]Mask  `json:"masks"`
 	Digest    string           `json:"digest"`
 	CreatedAt time.Time        `json:"createdAt"`
 }
@@ -115,6 +128,7 @@ type State struct {
 	Version   int                 `json:"version"`
 	Scenes    map[string]Scene    `json:"scenes"`
 	Assets    map[string]Asset    `json:"assets"`
+	Masks     map[string]Mask     `json:"masks"`
 	Snapshots map[string]Snapshot `json:"snapshots"`
 	Jobs      map[string]Job      `json:"jobs"`
 	Artifacts map[string]Artifact `json:"artifacts"`
@@ -124,7 +138,7 @@ type State struct {
 }
 
 func NewState() State {
-	return State{Version: FormatVersion, Scenes: map[string]Scene{}, Assets: map[string]Asset{}, Snapshots: map[string]Snapshot{}, Jobs: map[string]Job{}, Artifacts: map[string]Artifact{}, Receipts: map[string]Receipt{}}
+	return State{Version: FormatVersion, Scenes: map[string]Scene{}, Assets: map[string]Asset{}, Masks: map[string]Mask{}, Snapshots: map[string]Snapshot{}, Jobs: map[string]Job{}, Artifacts: map[string]Artifact{}, Receipts: map[string]Receipt{}}
 }
 func Digest(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 func CanonicalDigest(v any) string {
@@ -138,7 +152,8 @@ func SnapshotDigest(s Snapshot) string {
 	return CanonicalDigest(struct {
 		Document Document
 		Assets   map[string]Asset
-	}{s.Document, s.Assets})
+		Masks    map[string]Mask
+	}{s.Document, s.Assets, s.Masks})
 }
 func Clone[T any](v T) T {
 	b, e := json.Marshal(v)

@@ -31,8 +31,8 @@ func (p Plan) Render(ctx context.Context) (*image.NRGBA, error) {
 					continue
 				}
 				visible := true
-				for _, c := range op.clips {
-					if !geometry.InRect(c.inverse.Apply(world), c.rect) {
+				for _, cl := range op.clips {
+					if !geometry.InRect(cl.inverse.Apply(world), cl.rect) {
 						visible = false
 						break
 					}
@@ -49,6 +49,53 @@ func (p Plan) Render(ctx context.Context) (*image.NRGBA, error) {
 				if l.Kind == "polygon" && !geometry.InPolygon(local, l.Points) {
 					continue
 				}
+				alpha := op.opacity
+				if op.mask != nil {
+					ml := op.mask.inverse.Apply(world)
+					if ml.X < 0 || ml.Y < 0 || ml.X >= float64(op.mask.width) || ml.Y >= float64(op.mask.height) {
+						continue
+					}
+					// The placement transform maps each mask texel onto a unit
+					// (or scaled) half-open cell in document space; truncating
+					// the mapped point gives the zero-origin texel index, which
+					// is then offset by the decoded image bounds.
+					mbounds := op.mask.bitmap.Bounds()
+					ix := int(ml.X)
+					iy := int(ml.Y)
+					if ix >= op.mask.width {
+						ix = op.mask.width - 1
+					}
+					if iy >= op.mask.height {
+						iy = op.mask.height - 1
+					}
+					mx := mbounds.Min.X + ix
+					my := mbounds.Min.Y + iy
+					// Read coverage straight from the source. Grayscale and
+					// alpha images carry the mask value directly; converting
+					// them through NRGBAModel would alpha-associate the
+					// channels and distort the luminance ramp.
+					var maskCoverage float64
+					switch pm := op.mask.bitmap.(type) {
+					case *image.Gray:
+						maskCoverage = float64(pm.GrayAt(mx, my).Y) / 255
+					case *image.Gray16:
+						maskCoverage = float64(pm.Gray16At(mx, my).Y) / 65535
+					case *image.Alpha:
+						maskCoverage = float64(pm.AlphaAt(mx, my).A) / 255
+					case *image.Alpha16:
+						maskCoverage = float64(pm.Alpha16At(mx, my).A) / 65535
+					default:
+						mc := color.NRGBAModel.Convert(op.mask.bitmap.At(mx, my)).(color.NRGBA)
+						maskCoverage = float64(mc.R+mc.G+mc.B) / (3 * 255)
+					}
+					if maskCoverage == 0 {
+						continue
+					}
+					alpha *= maskCoverage
+					if alpha == 0 {
+						continue
+					}
+				}
 				var c color.NRGBA
 				if op.bitmap != nil {
 					b := op.bitmap.Bounds()
@@ -58,7 +105,7 @@ func (p Plan) Render(ctx context.Context) (*image.NRGBA, error) {
 				} else {
 					c = paint.Sample(l.Fill, local)
 				}
-				c.A = uint8(math.Round(float64(c.A) * op.opacity))
+				c.A = uint8(math.Round(float64(c.A) * alpha))
 				blend(img, x, y, c)
 			}
 		}

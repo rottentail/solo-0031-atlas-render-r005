@@ -11,7 +11,7 @@ func Validate(s model.State) error {
 	if s.Version != model.FormatVersion {
 		return fmt.Errorf("unsupported state version %d", s.Version)
 	}
-	if s.Scenes == nil || s.Assets == nil || s.Snapshots == nil || s.Jobs == nil || s.Artifacts == nil || s.Receipts == nil {
+	if s.Scenes == nil || s.Assets == nil || s.Masks == nil || s.Snapshots == nil || s.Jobs == nil || s.Artifacts == nil || s.Receipts == nil {
 		return fmt.Errorf("state maps must be present")
 	}
 	for id, v := range s.Scenes {
@@ -27,6 +27,14 @@ func Validate(s model.State) error {
 			return fmt.Errorf("invalid asset record %s", id)
 		}
 		if e := ValidateAsset(v); e != nil {
+			return e
+		}
+	}
+	for id, v := range s.Masks {
+		if id != v.ID || !scene.ValidID(id) || (v.State != "available" && v.State != "retired") {
+			return fmt.Errorf("invalid mask record %s", id)
+		}
+		if e := ValidateMask(v); e != nil {
 			return e
 		}
 	}
@@ -106,6 +114,19 @@ func ValidateAsset(a model.Asset) error {
 	}
 	return nil
 }
+func ValidateMask(m model.Mask) error {
+	if model.Digest(m.PNG) != m.Digest {
+		return model.Invalid("mask digest mismatch")
+	}
+	img, e := codec.Decode(m.PNG)
+	if e != nil {
+		return e
+	}
+	if img.Bounds().Dx() != m.Width || img.Bounds().Dy() != m.Height {
+		return model.Invalid("mask dimensions mismatch")
+	}
+	return nil
+}
 func ValidateSnapshot(v model.Snapshot) error {
 	if e := scene.Validate(v.Document); e != nil {
 		return e
@@ -123,6 +144,19 @@ func ValidateSnapshot(v model.Snapshot) error {
 			return model.Invalid("snapshot asset missing")
 		}
 		if e := ValidateAsset(a); e != nil {
+			return e
+		}
+	}
+	maskRefs := scene.MaskRefs(v.Document)
+	if len(maskRefs) != len(v.Masks) {
+		return model.Invalid("snapshot mask closure mismatch")
+	}
+	for _, id := range maskRefs {
+		m, ok := v.Masks[id]
+		if !ok || id != m.ID {
+			return model.Invalid("snapshot mask missing")
+		}
+		if e := ValidateMask(m); e != nil {
 			return e
 		}
 	}

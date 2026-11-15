@@ -11,6 +11,25 @@ var identifier = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$`)
 
 func ValidID(id string) bool { return identifier.MatchString(id) }
 func finite(v float64) bool  { return !math.IsNaN(v) && !math.IsInf(v, 0) && math.Abs(v) <= 100000 }
+
+// MaskRefs returns the distinct mask ids referenced by layers, in first-use order.
+func MaskRefs(d model.Document) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	var walk func([]model.Layer)
+	walk = func(ls []model.Layer) {
+		for _, l := range ls {
+			if l.MaskID != "" && !seen[l.MaskID] {
+				seen[l.MaskID] = true
+				out = append(out, l.MaskID)
+			}
+			walk(l.Children)
+		}
+	}
+	walk(d.Layers)
+	return out
+}
+
 func Validate(d model.Document) error {
 	if d.Width < 1 || d.Height < 1 || d.Width > 1536 || d.Height > 1536 {
 		return model.Invalid("canvas dimensions must be 1..1536")
@@ -49,9 +68,28 @@ func Validate(d model.Document) error {
 					return model.Invalid("layer %s: invalid clip", l.ID)
 				}
 			}
+			if l.MaskID != "" {
+				if !ValidID(l.MaskID) {
+					return model.Invalid("layer %s references invalid mask id", l.ID)
+				}
+				if l.MaskTransform != nil {
+					mt := *l.MaskTransform
+					for _, n := range []float64{mt.X, mt.Y, mt.ScaleX, mt.ScaleY, mt.Degrees} {
+						if !finite(n) {
+							return model.Invalid("layer %s: nonfinite mask transform", l.ID)
+						}
+					}
+					if math.Abs(mt.ScaleX) < .001 || math.Abs(mt.ScaleY) < .001 || math.Abs(mt.ScaleX) > 100 || math.Abs(mt.ScaleY) > 100 {
+						return model.Invalid("layer %s: invalid mask transform scale", l.ID)
+					}
+				}
+			}
 			if l.Kind == "group" {
 				if len(l.Children) == 0 {
 					return model.Invalid("group %s is empty", l.ID)
+				}
+				if l.MaskID != "" {
+					return model.Invalid("group %s cannot carry a mask", l.ID)
 				}
 				if e := walk(l.Children, depth+1); e != nil {
 					return e

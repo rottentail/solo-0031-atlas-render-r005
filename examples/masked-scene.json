@@ -1,0 +1,45 @@
+{
+  "name": "蒙版复用示例",
+  "expectedRevision": 0,
+  "document": {
+    "width": 240,
+    "height": 160,
+    "background": "#FFFFFF",
+    "layers": [
+      {
+        "id": "wash",
+        "kind": "rectangle",
+        "width": 240,
+        "height": 160,
+        "transform": { "x": 0, "y": 0, "scaleX": 1, "scaleY": 1, "degrees": 0 },
+        "opacity": 1,
+        "fill": { "kind": "solid", "color": "#2060C0" },
+        "maskId": "soft-fade",
+        "maskTransform": { "x": 0, "y": 0, "scaleX": 3.75, "scaleY": 5, "degrees": 0 }
+      },
+      {
+        "id": "dot",
+        "kind": "ellipse",
+        "width": 80,
+        "height": 80,
+        "transform": { "x": 30, "y": 40, "scaleX": 1, "scaleY": 1, "degrees": 0 },
+        "opacity": 1,
+        "fill": { "kind": "solid", "color": "#E04030" },
+        "maskId": "soft-fade",
+        "maskTransform": { "x": 20, "y": 40, "scaleX": 1.5, "scaleY": 1.5, "degrees": 0 }
+      },
+      {
+        "id": "bar",
+        "kind": "rectangle",
+        "width": 100,
+        "height": 40,
+        "transform": { "x": 110, "y": 70, "scaleX": 1, "scaleY": 1, "degrees": 12 },
+        "opacity": 1,
+        "fill": { "kind": "solid", "color": "#30A050" },
+        "clip": { "x": 10, "y": 5, "width": 80, "height": 30 },
+        "maskId": "soft-fade",
+        "maskTransform": { "x": 90, "y": 60, "scaleX": 1, "scaleY": 1, "degrees": 0 }
+      }
+    ]
+  }
+}

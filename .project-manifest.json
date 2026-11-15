@@ -31,7 +31,7 @@
     {
       "id": "raster",
       "path": "internal/raster",
-      "responsibility": "场景编译、裁剪链和逐像素合成"
+      "responsibility": "场景编译、裁剪链、灰度蒙版和逐像素合成"
     },
     {
       "id": "persist",
@@ -298,6 +298,26 @@
         "通过存储或渲染结果观察已提交事实"
       ],
       "verification": "python3 scripts/walkthrough.py --workflow import-package"
+    },
+    {
+      "id": "mask-lifecycle",
+      "name": "灰度蒙版接入到交换",
+      "entry": "PUT /v1/masks/{id} + 图层 maskId/maskTransform",
+      "success": "蒙版被多图层共享，冻结捕获字节，退役不改已冻结像素，交换后另一实例渲染相同像素",
+      "failure": "悬空或零缩放蒙版引用拒绝，超尺寸蒙版和超预算复用拒绝，损坏交换包整体回滚",
+      "module_ids": [
+        "httpapi",
+        "service",
+        "scene",
+        "raster",
+        "persist",
+        "bundle"
+      ],
+      "steps": [
+        "经公开HTTP入口完成领域转换",
+        "通过存储或渲染结果观察已提交事实"
+      ],
+      "verification": "python3 scripts/mask_walkthrough.py --out var/mask-demo"
     },
     {
       "id": "compare-renders",

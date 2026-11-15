@@ -13,6 +13,12 @@ type clip struct {
 	inverse geometry.Matrix
 	rect    model.Rect
 }
+type maskBinding struct {
+	inverse geometry.Matrix
+	bitmap  image.Image
+	width   int
+	height  int
+}
 type operation struct {
 	layer   model.Layer
 	inverse geometry.Matrix
@@ -20,6 +26,7 @@ type operation struct {
 	opacity float64
 	bounds  image.Rectangle
 	bitmap  image.Image
+	mask    *maskBinding
 }
 type Plan struct {
 	Width, Height, Scale int
@@ -37,6 +44,7 @@ func Compile(s model.Snapshot, scale int) (Plan, error) {
 	}
 	p := Plan{Width: s.Document.Width * scale, Height: s.Document.Height * scale, Scale: scale, Background: s.Document.Background}
 	decoded := map[string]image.Image{}
+	decodedMasks := map[string]image.Image{}
 	var walk func([]model.Layer, geometry.Matrix, []clip, float64) error
 	walk = func(ls []model.Layer, parent geometry.Matrix, clips []clip, alpha float64) error {
 		for _, l := range ls {
@@ -86,6 +94,31 @@ func Compile(s model.Snapshot, scale int) (Plan, error) {
 					decoded[l.AssetID] = img
 				}
 				op.bitmap = img
+			}
+			if l.MaskID != "" {
+				mk, ok := s.Masks[l.MaskID]
+				if !ok {
+					return model.Invalid("missing pinned mask %s", l.MaskID)
+				}
+				mimg := decodedMasks[l.MaskID]
+				if mimg == nil {
+					var e error
+					mimg, e = codec.Decode(mk.PNG)
+					if e != nil {
+						return e
+					}
+					decodedMasks[l.MaskID] = mimg
+				}
+				mt := model.Transform{ScaleX: 1, ScaleY: 1}
+				if l.MaskTransform != nil {
+					mt = *l.MaskTransform
+				}
+				mInv, ok := geometry.From(mt).Inverse()
+				if !ok {
+					return model.Invalid("layer %s has singular mask transform", l.ID)
+				}
+				mb := mimg.Bounds()
+				op.mask = &maskBinding{inverse: mInv, bitmap: mimg, width: mb.Dx(), height: mb.Dy()}
 			}
 			p.Cost += int64(b.Dx()) * int64(b.Dy())
 			if p.Cost > 40_000_000 {
